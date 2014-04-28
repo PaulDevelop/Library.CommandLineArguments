@@ -31,7 +31,7 @@ abstract class Parser
      *
      * @return array
      */
-    public static function Parse($commandLineArguments = '')
+    public static function parse($commandLineArguments = '')
     {
         // --- init ---
         $result = array();
@@ -70,12 +70,11 @@ abstract class Parser
             ) {
                 $argumentIsOpen = true;
                 $buffer .= $currentChar;
-            }
-            else if ($argumentIsOpen
+            } elseif ($argumentIsOpen
                 && $currentChar != SPACE
             ) {
                 $buffer .= $currentChar;
-            } else if ($argumentIsOpen
+            } elseif ($argumentIsOpen
                 && $currentChar == SPACE
             ) {
                 $argumentIsOpen = false;
@@ -180,9 +179,9 @@ abstract class Parser
             array_push($parameter, array('type' => 'parameter', 'name' => $buffer, 'value' => $value));
         }
 
-
         array_walk(
-            $parameter, function (&$p = array()) {
+            $parameter,
+            function (&$p = array()) {
                 $p['name'] = preg_replace('/^\-+/', '', $p['name']);
             }
         );
