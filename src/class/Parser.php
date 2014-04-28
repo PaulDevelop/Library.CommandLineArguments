@@ -1,5 +1,6 @@
 <?php
-namespace Com\PaulDevelop\Library\Processing\CommandLineArguments;
+
+namespace Com\PaulDevelop\Library\CommandLineArguments;
 
 /**
  * Parser

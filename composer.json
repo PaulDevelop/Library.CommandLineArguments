@@ -27,5 +27,10 @@
         "psr-4": {
             "Com\\PaulDevelop\\Library\\CommandLineArguments\\": "src/class"
         }
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-master": "0.0.x-dev"
+        }
     }
 }
