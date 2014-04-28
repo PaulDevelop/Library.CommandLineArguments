@@ -71,20 +71,6 @@ abstract class Parser
                 $argumentIsOpen = true;
                 $buffer .= $currentChar;
             }
-//                else if ( $argumentIsOpen
-//                  && !$stringIsOpen
-//                  && $currentChar == '"' ) {
-//                    echo "B";
-//                      $stringIsOpen = true;
-//                    $buffer .= $currentChar;
-//                }
-//                else if ( $argumentIsOpen
-//                  && $stringIsOpen
-//                  && $currentChar == '"' ) {
-//                    echo "C";
-//                      $stringIsOpen = false;
-//                    $buffer .= $currentChar;
-//                }
             else if ($argumentIsOpen
                 && $currentChar != SPACE
             ) {
