@@ -18,184 +18,328 @@ abstract class Parser
     // -k="value"
     // --key=value
     // --key="value"
-
+    //
     // -a -b  => two flags
     // --AllEntries --BestBefore => twoFlags
-
+    //
     // -a 1 -b foo   => two parameter: a with value 1, b with value foo
     //
     //
+    //
+    // usage: [-a] -b value2 [-key1] [-key2 value4] value5 [value6] ...
+    // a,b:value?,key1?,key2:value,param1,param2?
 
     #region methods
-    /**
-     * @param string $commandLineArguments
-     *
-     * @return array
-     */
-    public static function parse($commandLineArguments = '')
+    private static function parseArgumentSettings($argumentConfig = '')
     {
-        // --- init ---
-        $result = array();
+        // init
+        $result = new ArgumentSettingCollection();
 
-        // --- action ---
-        $stringIsOpen = false;
-        $argumentIsOpen = false;
-        $isShortFlag = false;
-        $isLongFlag = false;
+        // action
+        $chunks = preg_split('/,/', $argumentConfig);
+        foreach ($chunks as $chunk) {
+            $variable = '';
+            $optional = false;
+            $type = new ArgumentType();
 
-        define('SPACE', ' ');
-
-        $parameter = array();
-
-        $buffer = '';
-        $lastChar = '';
-        $currentChar = '';
-        $nextChar = '';
-        for ($i = 0; $i < strlen($commandLineArguments); $i++) {
-            if (($i - 1) > 0) {
-                $lastChar = $commandLineArguments[($i - 1)];
-            }
-            $currentChar = $commandLineArguments[$i];
-            if (($i + 1) < strlen($commandLineArguments)) {
-                $nextChar = $commandLineArguments[($i + 1)];
+            if (substr($chunk, strlen($chunk) - 1, 1) == '?') {
+                $optional = true;
+                $chunk = substr($chunk, 0, strlen($chunk) - 1);
             }
 
-            if (!$argumentIsOpen
-                && $currentChar == SPACE
-            ) {
-                continue;
-            }
-
-            if (!$argumentIsOpen
-                && $currentChar != SPACE
-            ) {
-                $argumentIsOpen = true;
-                $buffer .= $currentChar;
-            } elseif ($argumentIsOpen
-                && $currentChar != SPACE
-            ) {
-                $buffer .= $currentChar;
-            } elseif ($argumentIsOpen
-                && $currentChar == SPACE
-            ) {
-                $argumentIsOpen = false;
-                $buffer .= $currentChar;
-
-                //echo " ".$buffer."\n";
-
-                if (strlen($buffer) > 0 && substr($buffer, 0, 1) == '-') {
-                    if (strlen($buffer) > 1 && substr($buffer, 0, 2) == '--') {
-                        $isLongFlag = true;
-                    } else {
-                        $isShortFlag = true;
-                    }
-                }
-
-                // check, if previous argument had leading -
-                if (($isLongFlag || $isShortFlag) && sizeof($parameter) > 0) {
-                    $name = $parameter[(sizeof($parameter) - 1)]['name'];
-                    if (substr($name, 0, 1) == '-') {
-                        if (substr($name, 0, 2) == '--') {
-                            $parameter[(sizeof($parameter) - 1)]['type'] = 'flagLong';
-                        } else {
-                            $parameter[(sizeof($parameter) - 1)]['type'] = 'flagShort';
-                        }
-                    }
-                }
-
-                $previousArgumentIsFlag = false;
-                if (sizeof($parameter) > 0) {
-                    $name = $parameter[(sizeof($parameter) - 1)]['name'];
-                    if (substr($name, 0, 1) == '-') {
-                        $previousArgumentIsFlag = true;
-                    }
-                }
-
-                $value = '';
-                $pos = strpos($buffer, '=');
-                if (($pos = strpos($buffer, '=')) != false) {
-                    $value = substr($buffer, $pos + 1);
-                    $buffer = substr($buffer, 0, $pos);
-                }
-
-                $buffer = trim($buffer);
-                $value = trim($value);
-
-                if (!$isLongFlag && !$isShortFlag && $previousArgumentIsFlag) {
-                    $parameter[(sizeof($parameter) - 1)]['value'] = $buffer;
-                } else {
-                    array_push($parameter, array('type' => 'parameter', 'name' => $buffer, 'value' => $value));
-                }
-
-                $buffer = '';
-                $argumentIsOpen = false;
-                $stringIsOpen = false;
-                $isShortFlag = false;
-                $isLongFlag = false;
-            }
-        }
-
-        //echo " ".$buffer."\n";
-        if (strlen($buffer) > 0 && substr($buffer, 0, 1) == '-') {
-            if (strlen($buffer) > 1 && substr($buffer, 0, 2) == '--') {
-                $isLongFlag = true;
+            if (strpos($chunk, '=') > 0) {
+                // argument with value
+                list($keys, $variable) = preg_split('/=/', $chunk);
+                list($parameterName, $shortFlagName, $longFlagName) = preg_split('/\//', $keys);
             } else {
-                $isShortFlag = true;
+                // argument without value
+                list($parameterName, $shortFlagName, $longFlagName) = preg_split('/\//', $chunk);
             }
-        }
 
-        // check, if previous argument had leading -
-        if (($isLongFlag || $isShortFlag) && sizeof($parameter) > 0) {
-            $name = $parameter[(sizeof($parameter) - 1)]['name'];
-            //echo $name."<br />\n";
-            if (substr($name, 0, 1) == '-') {
-                if (substr($name, 0, 2) == '--') {
-                    $parameter[(sizeof($parameter) - 1)]['type'] = 'flagLong';
-                } else {
-                    $parameter[(sizeof($parameter) - 1)]['type'] = 'flagShort';
-                }
+            if ($parameterName != '') {
+                $type->addFlag(ArgumentType::PARAMETER);
             }
-        }
-
-        $previousArgumentIsFlag = false;
-        if (sizeof($parameter) > 0) {
-            $name = $parameter[(sizeof($parameter) - 1)]['name'];
-            if (substr($name, 0, 1) == '-') {
-                $previousArgumentIsFlag = true;
+            if ($shortFlagName != '') {
+                $type->addFlag(ArgumentType::SHORT_FLAG);
             }
-        }
-
-        $value = '';
-        if (($pos = strpos($buffer, '=')) != false) {
-            $value = substr($buffer, $pos + 1);
-            $buffer = substr($buffer, 0, $pos);
-        }
-
-        $buffer = trim($buffer);
-        $value = trim($value);
-
-        if (!$isLongFlag && !$isShortFlag && $previousArgumentIsFlag) {
-            $parameter[(sizeof($parameter) - 1)]['value'] = $buffer;
-        } else {
-            array_push($parameter, array('type' => 'parameter', 'name' => $buffer, 'value' => $value));
-        }
-
-        array_walk(
-            $parameter,
-            function (&$p = array()) {
-                $p['name'] = preg_replace('/^\-+/', '', $p['name']);
+            if ($longFlagName != '') {
+                $type->addFlag(ArgumentType::LONG_FLAG);
             }
-        );
-        //var_dump($parameter);
 
-        $result = array();
-        foreach ($parameter as $argument) {
-            $result[$argument['name']] = array('value' => $argument['value'], 'type' => $argument['type']);
+            $ac = new ArgumentSetting(
+                $parameterName,
+                $shortFlagName,
+                $longFlagName,
+                $variable,
+                $optional,
+                $type
+            );
+            $result->add($ac);
         }
 
-        // --- return ---
+        //var_dump($result);
+        //var_dump($result['m']);
+        //die;
+
+        // return
         return $result;
     }
 
+    /**
+     * @param string $commandLineArguments
+     * @param string $argumentSettings
+     *
+     * @return ArgumentCollection
+     * @throws \Com\PaulDevelop\Library\Common\ArgumentException
+     * @throws \Com\PaulDevelop\Library\Common\TypeCheckException
+     */
+    public static function parse($commandLineArguments = '', $argumentSettings = '')
+    {
+        // === short version ===
+        // generator -m file [-mt dir] -t dir [-o dir] [-l list] [-c file] [-v]
+        //
+        // meta information
+        //   /m/model=file,/mt/master-template=dir?,/t/template=dir,/o/output=dir?,/l/limit=list?,/c/config=file?,
+        //   /v/verbose
+        //
+        // meta information for template specific arguments (templates/website-3.0.0/.generator/config.xml)
+        //   database//=dsn,database-test//=dsn,application-host//=url,application-path//=path,
+        //   application-name//=name,application-namespace//=name
+        //
+        // generator -m /home/vagrant/project/model/website.model.xml
+        //           -mt /home/vagrant/project/.generator/templates/website-3.0.0
+        //           -t /home/vagrant/project/_templates/
+        //           -o /home/vagrant/project/
+        //           -l ":"
+        //           -c ""
+        //           -v
+        //
+        // === long version ===
+        // generator --model file [--master-template dir] --template dir [--output dir] [--limit list]
+        //           [--config file] [--verbose]
+        //
+        // generator --model /home/vagrant/project/model/website.model.xml
+        //           --master-template /home/vagrant/project/.generator/templates/website-3.0.0
+        //           --template /home/vagrant/project/_templates/
+        //           --output /home/vagrant/project/
+        //           --limit ":"
+        //           --config ""
+        //           --verbose
+        //
+        // === template specific arguments ===
+        //           --database=dsn
+        //           --database-test=dsn
+        //           --application-host=url
+        //           --application-path=path
+        //           --application-name=name
+        //           --application-namespace=name
+        //
+        //           --database=pd:pd@127.0.0.1/pd_generator
+        //           --database-test=test:test@127.0.0.1/test_pd_generator
+        //           --application-host=http://pauldevelop.no-ip.info:94/
+        //           --application-path=/
+        //           --application-name=planetkeys
+        //           --application-namespace=Com\\PlanetKeys\\Website
+        //
+        // === help ===
+        // generator -m, --model file
+        //           -mt, --master-template dir
+        //           -t, --template dir
+        //           -o, --output dir
+        //           -l, --limit /dir1/:/dir2/
+        //           -c, --config generator.xml
+        //
+        // === version ===
+
+        // init
+        $result = new ArgumentCollection();
+
+        // action
+        // parse argument settings
+        $argumentSettingCollection = null;
+        if ($argumentSettings != '') {
+            $argumentSettingCollection = self::parseArgumentSettings($argumentSettings);
+        }
+
+        // parse arguments
+        $stringIsOpen = false;
+        $argumentIsOpen = false;
+
+        $buffer = '';
+        for ($i = 0; $i < strlen($commandLineArguments); $i++) {
+            $currentChar = $commandLineArguments[$i];
+
+            //echo $currentChar;
+
+            if (!$argumentIsOpen) {
+                if ($currentChar == Constants::SPACE) {
+                    // ignore whitespace between arguments
+                    continue;
+                } else {
+                    // open argument
+                    $argumentIsOpen = true;
+
+                    if ($currentChar == Constants::STRING_TERMINATOR) {
+                        // open string
+                        $stringIsOpen = true;
+                    } else {
+                        // add non space or string terminator char to buffer
+                        $buffer .= $currentChar;
+                    }
+
+                }
+            } else {
+                if ($stringIsOpen) {
+                    if ($currentChar == Constants::STRING_TERMINATOR) {
+                        // end string
+                        $stringIsOpen = false;
+
+                        // end argument
+                        $argument = self::endArgument($buffer);
+                        $result->add($argument, $argument->Name);
+
+                        $argumentIsOpen = false;
+                        $buffer = '';
+                    } else {
+                        // add to buffer
+                        $buffer .= $currentChar;
+                    }
+                } else {
+                    if ($currentChar == Constants::STRING_TERMINATOR) {
+                        // open string
+                        $stringIsOpen = true;
+                    } elseif ($currentChar == Constants::SPACE) {
+                        // end argument
+                        $argument = self::endArgument($buffer);
+                        //var_dump($argument);
+                        //var_dump($as[$argument->Name]);
+                        //die;
+                        $result->add($argument, $argument->Name);
+
+                        $argumentIsOpen = false;
+                        $buffer = '';
+                    } else {
+                        // add to buffer
+                        $buffer .= $currentChar;
+                    }
+                }
+            }
+        }
+
+        // process rest of buffer (input end)
+        if (trim($buffer) != '') {
+            $argument = self::endArgument($buffer);
+            $result->add($argument, $argument->Name);
+        }
+
+        // checks
+        if ($argumentSettingCollection != null) {
+            $result = self::collapseNameAndValue($result, $argumentSettingCollection);
+        }
+
+        // check missing optional arguments
+
+        // return
+        return $result;
+    }
+
+    /**
+     * @param string $buffer
+     *
+     * @return Argument
+     */
+    private static function endArgument($buffer = '')
+    {
+        // action
+        //echo 'buffer: '.$buffer.PHP_EOL;
+        //echo "================================================================================".PHP_EOL;
+        //var_dump($buffer);
+
+        //die;
+
+        // name and value
+        $name = $buffer;
+        $value = '';
+        if (($pos = strpos($buffer, '=')) != false) {
+            $name = substr($buffer, 0, $pos);
+            $value = substr($buffer, $pos + 1);
+        }
+
+        // type
+        //$type = ArgumentType::PARAMETER;
+        $type = new ArgumentType();
+        if (substr($buffer, 0, 1) == '-') {
+            if (substr($buffer, 0, 2) == '--') {
+                $name = substr($name, 2);
+                //$type = ArgumentType::LONG_FLAG;
+                $type->addFlag(ArgumentType::LONG_FLAG);
+            } else {
+                $name = substr($name, 1);
+                //$type = ArgumentType::SHORT_FLAG;
+                $type->addFlag(ArgumentType::SHORT_FLAG);
+            }
+        } else {
+            $type->addFlag(ArgumentType::PARAMETER);
+        }
+
+        //var_dump($name);
+        //die;
+
+        //$result = array($name => array('value' => $value, 'type' => $type));
+        //$at = new ArgumentType();
+        //$at->addFlag()
+        $result = new Argument($name, $value, $type);
+
+        //var_dump($result);
+
+        // return
+        return $result;
+    }
+
+    /**
+     * @param ArgumentCollection        $argumentCollection
+     * @param ArgumentSettingCollection $argumentSettingCollection
+     *
+     * @return ArgumentCollection
+     * @throws \Com\PaulDevelop\Library\Common\ArgumentException
+     * @throws \Com\PaulDevelop\Library\Common\TypeCheckException
+     */
+    public static function collapseNameAndValue(
+        ArgumentCollection $argumentCollection,
+        ArgumentSettingCollection $argumentSettingCollection
+    ) {
+        // combine arguments and values
+        $result = new ArgumentCollection();
+        $argumentNames = array_keys($argumentCollection->getIterator()->getArrayCopy());
+        for ($i = 0; $i < count($argumentNames); $i++) {
+            /** @var Argument $argument */
+            $argument = $argumentCollection[$argumentNames[$i]];
+            $argumentSetting = $argumentSettingCollection[$argumentNames[$i]];
+            /** @var ArgumentSetting $argumentSetting */
+            if ($argumentSetting == null
+                || $argumentSetting->Variable == ''
+                || ($argumentSetting->Variable != '' && $argument->Value != '')
+            ) {
+                $newArgument = new Argument(
+                    $argument->Name,
+                    $argument->Value,
+                    $argument->Type
+                );
+                $result->add($newArgument, $newArgument->Name);
+            } else {
+                // get name of next argument and set as value
+                $nextArgument = $argumentCollection[$argumentNames[$i + 1]];
+                /** @var Argument $nextArgument */
+                $newArgument = new Argument(
+                    $argument->Name,
+                    $nextArgument->Name,
+                    $argument->Type
+                );
+                $result->add($newArgument, $newArgument->Name);
+                $i++;
+            }
+        }
+        return $result;
+    }
     #endregion
 }

@@ -1,6 +1,6 @@
 {
     "name": "Com.PaulDevelop.Library.CommandLineArguments",
-    "version": "0.0.2",
+    "version": "0.0.4",
     "description": "Commonly used classes to parse command line arguments.",
     "devDependencies": {
         "grunt": "~0.4.2",
